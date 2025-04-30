@@ -1,27 +1,25 @@
-// --- IMPORT 'body' HERE ---
+// middleware/validationMiddleware.js
 const { check, body, validationResult } = require("express-validator");
 
 // Middleware to handle validation results
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    // Return only the first error message for simplicity, or customize as needed
-    // Consider joining messages for better feedback:
+    console.error("Validation Errors caught in Middleware:", errors.array());
     const messages = errors.array().map((err) => err.msg);
+    // Sending joined message which might result in "Confirm password is required. Passwords do not match"
     return res.status(400).json({ message: messages.join(". ") });
-    // Original: return res.status(400).json({ message: errors.array()[0].msg });
   }
   next();
 };
 
-// Validation rules for host registration (using check - this is fine)
+// Validation rules for host registration
 const hostRegistrationValidationRules = () => {
   return [
     check("organizationName")
       .trim()
       .notEmpty()
       .withMessage("Organization name is required"),
-
     check("orgEmail")
       .trim()
       .notEmpty()
@@ -29,50 +27,54 @@ const hostRegistrationValidationRules = () => {
       .isEmail()
       .withMessage("Must be a valid email address")
       .normalizeEmail(),
-
     check("mobileNumber")
       .trim()
       .notEmpty()
       .withMessage("Mobile number is required")
-      // Optional: Keep or remove isMobilePhone based on how strict you need it
-      .isMobilePhone("any", { strictMode: false })
-      .withMessage("Must be a valid mobile number format"), // 'any' checks common formats
-
+      .isLength({ min: 10, max: 15 })
+      .withMessage("Mobile number seems invalid"),
     check("password")
       .notEmpty()
       .withMessage("Password is required")
       .isLength({ min: 6 })
       .withMessage("Password must be at least 6 characters long"),
 
+    // --- KEEPING Confirm Password Validation ---
     check("confirmPassword")
       .notEmpty()
-      .withMessage("Confirm password is required")
+      .withMessage("Confirm password is required") // Checks if field exists and is not empty
       .custom((value, { req }) => {
+        // Custom check for matching password
         if (value !== req.body.password) {
+          // If they don't match, throw an error which express-validator catches
           throw new Error("Passwords do not match");
         }
-        return true; // Indicates the success of this synchronous custom validator
+        // If they match, return true to indicate success
+        return true;
       }),
+    // ------------------------------------------
 
     check("orgLocation")
       .trim()
       .notEmpty()
       .withMessage("Organization location is required"),
-
-    // No validation for businessDoc here as requested
+    check("walletAddress")
+      .trim()
+      .notEmpty()
+      .withMessage("Wallet address is required")
+      .matches(/^0x[a-fA-F0-9]{40}$/)
+      .withMessage("Please provide a valid wallet address"),
   ];
 };
 
-// --- Validation rules for host login (using body) ---
+// Validation rules for host login
 const hostLoginValidationRules = () => {
   return [
-    // Now `body` is defined because we imported it
     body("email")
       .isEmail()
       .withMessage("Please provide a valid email address")
-      .normalizeEmail(), // Good practice to normalize email for comparison
-
-    body("password").notEmpty().withMessage("Password is required"), // No need for length check here, just existence
+      .normalizeEmail(),
+    body("password").notEmpty().withMessage("Password is required"),
   ];
 };
 
